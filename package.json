@@ -15,8 +15,7 @@
     "node-id3": "^0.2.9",
     "react": "latest",
     "react-dom": "latest",
-    "soundcloud-downloader": "latest",
-    "ytdl-core": "^4.11.5"
+    "soundcloud-downloader": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",
