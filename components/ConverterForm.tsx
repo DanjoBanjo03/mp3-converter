@@ -1,27 +1,15 @@
 // components/ConverterForm.js
-import React, { useState } from 'react';
+import { useState } from 'react'
 
-/**
- * @typedef {Object} ConverterFormProps
- * @property {string} placeholder
- * @property {(url: string) => void} onSubmit
- * @property {boolean} loading
- */
-
-/**
- * A simple URL input + submit form.
- * @param {ConverterFormProps} props
- */
 export default function ConverterForm({ placeholder, onSubmit, loading }) {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState('')
 
   return (
     <div style={{ margin: '1rem 0' }}>
-
       <form
         onSubmit={e => {
-          e.preventDefault();
-          onSubmit(url);
+          e.preventDefault()
+          onSubmit(url)
         }}
       >
         <input
@@ -41,5 +29,5 @@ export default function ConverterForm({ placeholder, onSubmit, loading }) {
         </button>
       </form>
     </div>
-  );
+  )
 }

@@ -1,26 +1,44 @@
 // components/TagForm.js
 import { useState } from 'react'
-import ResultLink from './ResultLink'
 
 export default function TagForm({ origUrl, onBack }) {
-  const [title,   setTitle]   = useState('')
-  const [artist,  setArtist]  = useState('')
-  const [year,    setYear]    = useState('')
-  const [link,    setLink]    = useState(null)
-  const [error,   setError]   = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [title,    setTitle]    = useState('')
+  const [artist,   setArtist]   = useState('')
+  const [year,     setYear]     = useState('')
+  const [coverFile,setCoverFile]= useState(null)
+  const [link,     setLink]     = useState(null)
+  const [error,    setError]    = useState(null)
+  const [loading,  setLoading]  = useState(false)
 
   async function handleTag(e) {
     e.preventDefault()
+    if (!coverFile) {
+      setError('Please select a cover image.')
+      return
+    }
     setLoading(true)
     setError(null)
     setLink(null)
+
+    // Read file as Base64
+    const coverData = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = reject
+      reader.readAsDataURL(coverFile)
+    })
 
     try {
       const res = await fetch('/api/youtube', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url: origUrl, title, artist, year })
+        body:    JSON.stringify({
+          url:       origUrl,
+          title,
+          artist,
+          year,
+          coverData
+        }),
       })
 
       if (!res.ok) {
@@ -29,7 +47,6 @@ export default function TagForm({ origUrl, onBack }) {
         throw new Error(msg)
       }
 
-      // get the tagged MP3 blob
       const blob = await res.blob()
       setLink(URL.createObjectURL(blob))
     } catch (err) {
@@ -68,13 +85,31 @@ export default function TagForm({ origUrl, onBack }) {
           required
           style={{ display:'block', width:'100%', marginBottom:8 }}
         />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={e => setCoverFile(e.target.files?.[0] || null)}
+          required
+          style={{ display:'block', width:'100%', marginBottom:8 }}
+        />
         <button type="submit" disabled={loading}>
           {loading ? 'Tagging…' : 'Tag & Download MP3'}
         </button>
       </form>
 
-      {/* Render the download link via ResultLink */}
-      <ResultLink link={link} error={error} />
+      {error && (
+        <div style={{ color: 'red', marginTop: '1rem' }}>
+          {error}
+        </div>
+      )}
+
+      {link && (
+        <div style={{ marginTop: '1rem' }}>
+          <a href={link} download={`${title.replace(/[^a-z0-9]/gi, '_')}.mp3`}>
+            Download Tagged MP3
+          </a>
+        </div>
+      )}
     </div>
-  )
+)
 }

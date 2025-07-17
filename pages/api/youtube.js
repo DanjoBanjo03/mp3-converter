@@ -1,5 +1,4 @@
 // pages/api/youtube.js
-import NodeID3 from 'node-id3'
 import { convertYouTubeToMp3 } from '../../lib/youtube'
 
 const USE_PROXY = process.env.USE_YT_API === 'true'
@@ -12,15 +11,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' })
   }
 
-  const { url, title, artist, year } = req.body
+  const { url, title, artist, year, coverData } = req.body
   if (!url) {
     return res.status(400).json({ error: 'No URL provided' })
   }
 
-  // 1) If metadata is present, always run built-in converter + tagging
-  if (title && artist && year) {
+  // 1) If metadata (including coverData) is present, always tag via built-in converter
+  if (title && artist && year && coverData) {
     try {
-      await convertYouTubeToMp3(url, res, { title, artist, year })
+      await convertYouTubeToMp3(url, res, { title, artist, year, coverData })
     } catch (err) {
       console.error('Tagging converter error:', err)
       if (!res.headersSent) {
@@ -30,13 +29,12 @@ export default async function handler(req, res) {
     return
   }
 
-  // 2) No metadata: you can proxy if flag is on
+  // 2) No metadata: proxy via RapidAPI if enabled
   if (USE_PROXY) {
     try {
       const vid = new URL(url).searchParams.get('v')
       if (!vid) throw new Error('Invalid YouTube URL (missing v= parameter)')
 
-      // fetch MP3 link from RapidAPI
       const apiRes = await fetch(
         `https://${API_HOST}/dl?id=${encodeURIComponent(vid)}`,
         {
@@ -57,7 +55,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // 3) Built-in conversion (no tags)
+  // 3) Built-in conversion without tags
   try {
     await convertYouTubeToMp3(url, res)
   } catch (err) {
@@ -66,4 +64,13 @@ export default async function handler(req, res) {
       res.status(500).json({ error: err.message })
     }
   }
+}
+
+// Increase Next.js API body size limit to allow large Base64 images
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb', // Adjust as needed
+    },
+  },
 }

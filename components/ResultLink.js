@@ -1,28 +1,17 @@
 // components/ResultLink.js
-import React from 'react';
+import React from 'react'
 
 /**
- * @typedef {Object} ResultLinkProps
- * @property {string|null} link
- * @property {string=} error
- */
-
-/**
- * Renders a download link or error message.
- * @param {ResultLinkProps} props
+ * @param {{ link: string|null, error?: string }} props
  */
 export default function ResultLink({ link, error }) {
-  if (error) {
-    return <div className="error">{error}</div>;
-  }
-  if (!link) {
-    return null;
-  }
+  if (error) return <div style={{ color: 'red' }}>{error}</div>
+  if (!link) return null
   return (
-    <div className="result">
+    <div style={{ marginTop: '1rem' }}>
       <a href={link} download>
         Download MP3
       </a>
     </div>
-  );
+  )
 }

@@ -26,25 +26,17 @@ export default function YouTubePage() {
 
       if (!res.ok) {
         let msg = 'Conversion failed'
-        try {
-          const errData = await res.json()
-          msg = errData.error || msg
-        } catch {}
+        try { msg = (await res.json()).error || msg } catch {}
         throw new Error(msg)
       }
 
-      const contentType = res.headers.get('content-type') || ''
-      if (contentType.includes('application/json')) {
-        // Proxy mode
+      const ct = res.headers.get('content-type') || ''
+      if (ct.includes('application/json')) {
         const { downloadUrl } = await res.json()
         setLink(downloadUrl)
-      } else if (contentType.includes('audio')) {
-        // Built-in blob mode
-        const blob    = await res.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        setLink(blobUrl)
       } else {
-        throw new Error('Unexpected response type: ' + contentType)
+        const blob = await res.blob()
+        setLink(URL.createObjectURL(blob))
       }
 
       setMode('download')
@@ -55,7 +47,7 @@ export default function YouTubePage() {
     }
   }
 
-  // Tagging flow: show TagForm when in 'tag' mode
+  // Tag step
   if (mode === 'tag' && origUrl) {
     return (
       <div style={{ padding: '2rem', maxWidth: 600, margin: 'auto' }}>
@@ -65,7 +57,7 @@ export default function YouTubePage() {
     )
   }
 
-  // Default convert/download UI
+  // Default: convert / download
   return (
     <div style={{ padding: '2rem', maxWidth: 600, margin: 'auto' }}>
       <h2>YouTube → MP3</h2>
