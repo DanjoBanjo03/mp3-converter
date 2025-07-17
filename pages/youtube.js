@@ -2,15 +2,15 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import ConverterForm from '../components/ConverterForm'
-import ResultLink from '../components/ResultLink'
-import TagForm from '../components/TagForm'
-import Footer from '../components/Footer'
+import ResultLink    from '../components/ResultLink'
+import TagForm       from '../components/TagForm'
+import Footer        from '../components/Footer'
 
 export default function YouTubePage() {
-  const [mode, setMode] = useState('convert') // 'convert' | 'download' | 'tag'
+  const [mode,    setMode   ] = useState('convert') // 'convert' | 'download' | 'tag'
   const [origUrl, setOrigUrl] = useState(null)
-  const [link, setLink] = useState(null)
-  const [error, setError] = useState(null)
+  const [link,    setLink   ] = useState(null)
+  const [error,   setError  ] = useState(null)
   const [loading, setLoading] = useState(false)
 
   async function handleConvert(url) {
@@ -21,9 +21,9 @@ export default function YouTubePage() {
 
     try {
       const res = await fetch('/api/youtube', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body:    JSON.stringify({ url }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Conversion failed')
 
@@ -48,9 +48,9 @@ export default function YouTubePage() {
     setError(null)
     try {
       const res = await fetch('/api/youtube', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: origUrl, ...metadata })
+        body:    JSON.stringify({ url: origUrl, ...metadata }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Tagging failed')
 
@@ -68,7 +68,7 @@ export default function YouTubePage() {
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-      padding: '2rem 1rem',
+      padding: '2rem 1rem',                // simplified—no window access
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
@@ -76,7 +76,7 @@ export default function YouTubePage() {
         margin: '0 auto',
         background: 'white',
         borderRadius: '20px',
-        padding: window.innerWidth <= 768 ? '1.5rem' : '2rem',
+        padding: '2rem',                   // consistent padding
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -130,13 +130,13 @@ export default function YouTubePage() {
                 transition: 'all 0.3s ease',
                 boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)'
               }}
-              onMouseOver={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 8px 25px rgba(76, 175, 80, 0.4)';
+              onMouseOver={e => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 8px 25px rgba(76, 175, 80, 0.4)'
               }}
-              onMouseOut={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.3)';
+              onMouseOut={e => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.3)'
               }}
             >
               🏷️ Tag it
@@ -166,8 +166,14 @@ export default function YouTubePage() {
             {error}
           </div>
         )}
+
+        <Footer />
       </div>
-      <Footer />
     </div>
   )
+}
+
+// Disable static prerendering—use SSR instead
+export async function getServerSideProps() {
+  return { props: {} }
 }
