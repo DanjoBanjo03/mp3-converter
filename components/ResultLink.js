@@ -1,9 +1,6 @@
 // components/ResultLink.js
 import React from 'react'
 
-/**
- * @param {{ link: string|null, error?: string }} props
- */
 export default function ResultLink({ link, error }) {
   if (error) return <div style={{ color: 'red' }}>{error}</div>
   if (!link) return null

@@ -1,9 +1,20 @@
 // pages/api/youtube.js
-import { convertYouTubeToMp3 } from '../../lib/youtube'
+import { spawn } from 'child_process'
+import ffmpegPath from 'ffmpeg-static'
+import ffmpeg     from 'fluent-ffmpeg'
+import fs         from 'fs'
+import os         from 'os'
+import path       from 'path'
+import NodeID3    from 'node-id3'
+import youtubedl  from 'youtube-dl-exec'
 
-const USE_PROXY = process.env.USE_YT_API === 'true'
-const API_KEY   = process.env.YOUTUBE_API_KEY
-const API_HOST  = process.env.YOUTUBE_API_HOST
+// Point fluent-ffmpeg at the static binary
+ffmpeg.setFfmpegPath(ffmpegPath)
+
+// Allow large Base64 payloads (for cover art)
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,66 +22,67 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' })
   }
 
-  const { url, title, artist, year, coverData } = req.body
+  const { url, title, artist, year, coverData } = req.body || {}
   if (!url) {
     return res.status(400).json({ error: 'No URL provided' })
   }
 
-  // 1) If metadata (including coverData) is present, always tag via built-in converter
-  if (title && artist && year && coverData) {
-    try {
-      await convertYouTubeToMp3(url, res, { title, artist, year, coverData })
-    } catch (err) {
-      console.error('Tagging converter error:', err)
-      if (!res.headersSent) {
-        res.status(500).json({ error: err.message })
-      }
-    }
-    return
+  // Normalize YouTube URL (strip extra params)
+  let videoUrl
+  try {
+    const u = new URL(url)
+    const v = u.searchParams.get('v')
+    if (!v) throw new Error('Missing v parameter')
+    videoUrl = `https://www.youtube.com/watch?v=${v}`
+  } catch {
+    return res.status(400).json({ error: 'Invalid YouTube URL' })
   }
 
-  // 2) No metadata: proxy via RapidAPI if enabled
-  if (USE_PROXY) {
-    try {
-      const vid = new URL(url).searchParams.get('v')
-      if (!vid) throw new Error('Invalid YouTube URL (missing v= parameter)')
+  // Prepare temp output path
+  const tmpDir  = os.tmpdir()
+  const base    = (title || `yt-${Date.now()}`)
+    .replace(/[\/\\?%*:|"<>]/g, '_')
+  const mp3Path = path.join(tmpDir, `${base}.mp3`)
 
-      const apiRes = await fetch(
-        `https://${API_HOST}/dl?id=${encodeURIComponent(vid)}`,
-        {
-          method: 'GET',
-          headers: {
-            'X-RapidAPI-Key': API_KEY,
-            'X-RapidAPI-Host': API_HOST
+  try {
+    // 1) Download & convert via youtube-dl-exec
+    await youtubedl(videoUrl, {
+      output: mp3Path,
+      extractAudio: true,
+      audioFormat: 'mp3',
+      audioQuality: '0',         // best quality
+      noPlaylist: true,
+      ffmpegLocation: ffmpegPath // <<< tell ytdl where ffmpeg lives
+    })
+
+    // 2) Embed ID3 tags if provided
+    if (title && artist && year) {
+      const tags = { title, artist, year }
+      if (coverData) {
+        const m = coverData.match(/data:(.+);base64,(.+)/)
+        if (m) {
+          tags.image = {
+            mime: m[1],
+            type: { id: 3, name: 'front cover' },
+            description: 'Cover art',
+            imageBuffer: Buffer.from(m[2], 'base64')
           }
         }
-      )
-      const data = await apiRes.json()
-      if (!apiRes.ok) throw new Error(data.message || JSON.stringify(data))
-
-      return res.status(200).json({ downloadUrl: data.link })
-    } catch (err) {
-      console.error('YouTube proxy error:', err)
-      return res.status(500).json({ error: err.message })
+      }
+      NodeID3.write(tags, mp3Path)
     }
-  }
 
-  // 3) Built-in conversion without tags
-  try {
-    await convertYouTubeToMp3(url, res)
+    // 3) Stream back to client
+    res.setHeader('Content-Type', 'audio/mpeg')
+    res.setHeader('Content-Disposition', `attachment; filename="${base}.mp3"`)
+    fs.createReadStream(mp3Path)
+      .pipe(res)
+      .on('finish', () => {
+        fs.unlink(mp3Path, () => {})
+      })
+
   } catch (err) {
-    console.error('Built-in converter error:', err)
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message })
-    }
+    console.error('youtube-dl error:', err)
+    res.status(500).json({ error: err.message || 'Conversion failed' })
   }
-}
-
-// Increase Next.js API body size limit to allow large Base64 images
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb', // Adjust as needed
-    },
-  },
 }

@@ -1,15 +1,15 @@
 // pages/youtube.js
 import { useState } from 'react'
 import ConverterForm from '../components/ConverterForm'
-import ResultLink    from '../components/ResultLink'
-import TagForm       from '../components/TagForm'
+import ResultLink from '../components/ResultLink'
+import TagForm from '../components/TagForm'
 
 export default function YouTubePage() {
-  const [link,    setLink]    = useState(null)
-  const [error,   setError]   = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState('convert') // 'convert' | 'download' | 'tag'
   const [origUrl, setOrigUrl] = useState(null)
-  const [mode,    setMode]    = useState('convert') // 'convert' | 'download' | 'tag'
+  const [link, setLink] = useState(null)
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   async function handleConvert(url) {
     setLoading(true)
@@ -19,16 +19,11 @@ export default function YouTubePage() {
 
     try {
       const res = await fetch('/api/youtube', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url }),
+        body: JSON.stringify({ url })
       })
-
-      if (!res.ok) {
-        let msg = 'Conversion failed'
-        try { msg = (await res.json()).error || msg } catch {}
-        throw new Error(msg)
-      }
+      if (!res.ok) throw new Error((await res.json()).error || 'Conversion failed')
 
       const ct = res.headers.get('content-type') || ''
       if (ct.includes('application/json')) {
@@ -38,7 +33,6 @@ export default function YouTubePage() {
         const blob = await res.blob()
         setLink(URL.createObjectURL(blob))
       }
-
       setMode('download')
     } catch (err) {
       setError(err.message)
@@ -47,17 +41,27 @@ export default function YouTubePage() {
     }
   }
 
-  // Tag step
-  if (mode === 'tag' && origUrl) {
-    return (
-      <div style={{ padding: '2rem', maxWidth: 600, margin: 'auto' }}>
-        <h2>Tag Your MP3</h2>
-        <TagForm origUrl={origUrl} onBack={() => setMode('download')} />
-      </div>
-    )
+  async function handleTag(metadata) {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/youtube', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: origUrl, ...metadata })
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Tagging failed')
+
+      const blob = await res.blob()
+      setLink(URL.createObjectURL(blob))
+      setMode('download')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Default: convert / download
   return (
     <div style={{ padding: '2rem', maxWidth: 600, margin: 'auto' }}>
       <h2>YouTube → MP3</h2>
@@ -71,24 +75,28 @@ export default function YouTubePage() {
       )}
 
       {mode === 'download' && link && (
-        <div style={{ marginTop: '1rem' }}>
-          <a href={link} download>
-            Download MP3
-          </a>
+        <>
+          <ResultLink link={link} error={error} />
           <button
             onClick={() => setMode('tag')}
-            style={{ marginLeft: '1rem' }}
+            style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}
           >
-            Tag It
+            Tag it
           </button>
-        </div>
+        </>
       )}
 
-      {error && (
-        <div style={{ color: 'red', marginTop: '1rem' }}>
-          {error}
-        </div>
+      {mode === 'tag' && origUrl && (
+        <TagForm
+          origUrl={origUrl}
+          onSubmit={handleTag}
+          onBack={() => setMode('download')}
+          apiEndpoint="/api/youtube"
+          loading={loading}
+        />
       )}
+
+      {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
     </div>
   )
 }
