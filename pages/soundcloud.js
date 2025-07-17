@@ -1,8 +1,10 @@
 // pages/soundcloud.js
 import { useState } from 'react'
+import Link from 'next/link'
 import ConverterForm from '../components/ConverterForm'
 import ResultLink from '../components/ResultLink'
 import TagForm from '../components/TagForm'
+import Footer from '../components/Footer'
 
 export default function SoundCloudPage() {
   const [mode, setMode] = useState('convert') // 'convert' | 'download' | 'tag'
@@ -58,40 +60,109 @@ export default function SoundCloudPage() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: 600, margin: 'auto' }}>
-      <h2>SoundCloud → MP3</h2>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #ff8500 0%, #ff5500 100%)',
+      padding: '2rem 1rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      <div style={{
+        maxWidth: '600px',
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: '20px',
+        padding: window.innerWidth <= 768 ? '1.5rem' : '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <Link href="/" style={{
+            color: '#666',
+            textDecoration: 'none',
+            fontSize: '0.9rem',
+            marginBottom: '1rem',
+            display: 'inline-block'
+          }}>
+            ← Back to Home
+          </Link>
+          <h2 style={{
+            fontSize: '2rem',
+            marginBottom: '0.5rem',
+            background: 'linear-gradient(135deg, #ff8500, #ff5500)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: 'bold'
+          }}>
+            🎵 SoundCloud → MP3
+          </h2>
+          <p style={{ color: '#666', margin: 0 }}>
+            Convert SoundCloud tracks to MP3 format
+          </p>
+        </div>
 
-      {mode === 'convert' && (
-        <ConverterForm
-          placeholder="https://soundcloud.com/artist/track"
-          onSubmit={handleConvert}
-          loading={loading}
-        />
-      )}
+        {mode === 'convert' && (
+          <ConverterForm
+            placeholder="https://soundcloud.com/artist/track"
+            onSubmit={handleConvert}
+            loading={loading}
+          />
+        )}
 
-      {mode === 'download' && link && (
-        <>
-          <ResultLink link={link} error={error} />
-          <button
-            onClick={() => setMode('tag')}
-            style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}
-          >
-            Tag it
-          </button>
-        </>
-      )}
+        {mode === 'download' && link && (
+          <>
+            <ResultLink link={link} error={error} />
+            <button
+              onClick={() => setMode('tag')}
+              style={{
+                marginTop: '1rem',
+                padding: '0.75rem 1.5rem',
+                background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 8px 25px rgba(76, 175, 80, 0.4)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.3)';
+              }}
+            >
+              🏷️ Tag it
+            </button>
+          </>
+        )}
 
-      {mode === 'tag' && origUrl && (
-        <TagForm
-          origUrl={origUrl}
-          onSubmit={handleTag}
-          onBack={() => setMode('download')}
-          apiEndpoint="/api/soundcloud"
-          loading={loading}
-        />
-      )}
+        {mode === 'tag' && origUrl && (
+          <TagForm
+            origUrl={origUrl}
+            onSubmit={handleTag}
+            onBack={() => setMode('download')}
+            apiEndpoint="/api/soundcloud"
+            loading={loading}
+          />
+        )}
 
-      {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
+        {error && (
+          <div style={{
+            color: '#e74c3c',
+            background: '#fdf2f2',
+            padding: '1rem',
+            borderRadius: '8px',
+            marginTop: '1rem',
+            border: '1px solid #fecaca'
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
+      <Footer />
     </div>
   )
 }
