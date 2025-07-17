@@ -12,6 +12,5 @@
       "memory": 1024,
       "maxDuration": 30
     }
-  },
-  "ignore": ["node_modules/**", ".git/**", "public/downloads/**"]
+  }
 }
