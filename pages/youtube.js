@@ -76,7 +76,7 @@ export default function YouTubePage() {
         margin: '0 auto',
         background: 'white',
         borderRadius: '20px',
-        padding: window.innerWidth <= 768 ? '1.5rem' : '2rem',
+        padding: '2rem',
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
