@@ -26,7 +26,8 @@ async function fetchProxyMp3Url(videoId) {
 }
 
 export default async function handler(req, res) {
-  // 1) DOWNLOAD MODE: GET /api/youtube?url=<encoded YouTube URL>
+  // —— DOWNLOAD MODE ——  
+  // GET /api/youtube?url=<YouTube URL>
   if (req.method === 'GET') {
     const rawUrl = req.query.url
     if (!rawUrl) {
@@ -45,14 +46,16 @@ export default async function handler(req, res) {
 
     try {
       const mp3Url = await fetchProxyMp3Url(videoId)
-      // Attempt to stream via your function:
       const mp3Res = await fetch(mp3Url)
       if (mp3Res.ok) {
         res.setHeader('Content-Type', 'audio/mpeg')
-        res.setHeader('Content-Disposition', `attachment; filename="${videoId}.mp3"`)
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${videoId}.mp3"`
+        )
         return mp3Res.body.pipe(res)
       }
-      // Fallback: redirect browser to mp3Url
+      // fallback to redirect
       res.setHeader('Location', mp3Url)
       return res.status(307).end()
     } catch (err) {
@@ -61,24 +64,23 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2) PREVIEW MODE: POST /api/youtube { url }
+  // —— PREVIEW MODE ——  
+  // POST /api/youtube  { url }
   if (req.method === 'POST') {
     const { url } = req.body || {}
     if (!url) {
       return res.status(400).json({ error: 'No URL provided' })
     }
-    // Validate/extract videoId
     try {
-      new URL(url) // just to validate
+      new URL(url) // validate
     } catch {
       return res.status(400).json({ error: 'Invalid YouTube URL' })
     }
-    // Return the GET-download link
     const downloadLink = `/api/youtube?url=${encodeURIComponent(url)}`
     return res.status(200).json({ downloadUrl: downloadLink })
   }
 
-  // 3) Method not allowed
-  res.setHeader('Allow', ['GET','POST'])
+  // —— METHOD NOT ALLOWED ——  
+  res.setHeader('Allow', ['GET', 'POST'])
   res.status(405).end()
 }

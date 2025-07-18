@@ -16,7 +16,6 @@ export default function YouTubePage() {
     setLink(null)
 
     try {
-      // Ask your API for the download URL (always a link back to /api/youtube?url=...)
       const res = await fetch('/api/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,16 +35,56 @@ export default function YouTubePage() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: 600, margin: 'auto' }}>
-      <h2>YouTube → MP3</h2>
-      <ConverterForm
-        placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
-        onSubmit={handleConvert}
-        loading={loading}
-      />
-      <ResultLink link={link} error={error} />
-      <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-        <Link href="/">← Back Home</Link>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
+      padding: '2rem 1rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      <div style={{
+        maxWidth: '600px',
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: '20px',
+        padding: '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <Link
+            href="/"
+            style={{
+              color: '#666',
+              textDecoration: 'none',
+              fontSize: '0.9rem',
+              marginBottom: '1rem',
+              display: 'inline-block'
+            }}
+          >
+            ← Back to Home
+          </Link>
+          <h2 style={{
+            fontSize: '2rem',
+            marginBottom: '0.5rem',
+            background: 'linear-gradient(135deg, #ff6b6b, #ee5a24)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: 'bold'
+          }}>
+            🎬 YouTube → MP3
+          </h2>
+          <p style={{ color: '#666', margin: 0 }}>
+            Convert YouTube videos to MP3 format
+          </p>
+        </div>
+
+        <ConverterForm
+          placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
+          onSubmit={handleConvert}
+          loading={loading}
+        />
+
+        <ResultLink link={link} error={error} />
+
       </div>
     </div>
   )
