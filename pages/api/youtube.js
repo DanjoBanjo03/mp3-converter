@@ -1,64 +1,97 @@
-// pages/api/youtube.js
+// pages/youtube.js
 
-import ytdl from 'ytdl-core'
-import ffmpeg from 'fluent-ffmpeg'
-import ffmpegPath from 'ffmpeg-static'
-import { PassThrough } from 'stream'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import ConverterForm from '../components/ConverterForm'
+import ResultLink    from '../components/ResultLink'
 
-ffmpeg.setFfmpegPath(ffmpegPath)
+export default function YouTubePage() {
+  const [origin,  setOrigin ] = useState('')
+  const [downloadLink, setDownloadLink] = useState(null)
+  const [error,   setError  ] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-// Disable body parsing—this handler only supports GET
-export const config = { api: { bodyParser: false } }
+  // Grab the origin (e.g. http://localhost:3000)
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
 
-export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET'])
-    return res.status(405).send('Method Not Allowed')
+  function handleConvert(url) {
+    setError(null)
+    setDownloadLink(null)
+
+    try {
+      // Validate YouTube URL
+      const u = new URL(url)
+      const vid = u.searchParams.get('v') ||
+                  (u.hostname.includes('youtu.be') && u.pathname.slice(1))
+      if (!vid) throw new Error('Invalid YouTube URL')
+
+      // Build the GET download link
+      const link = `${window.location.origin}/api/youtube?url=${encodeURIComponent(url)}`
+      setDownloadLink(link)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  const rawUrl = req.query.url
-  if (!rawUrl) {
-    return res.status(400).send('No URL provided')
-  }
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
+      padding: '2rem 1rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      <div style={{
+        maxWidth: '600px',
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: '20px',
+        padding: '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <Link href="/" style={{
+            color: '#666',
+            textDecoration: 'none',
+            fontSize: '0.9rem',
+            display: 'inline-block'
+          }}>
+            ← Back to Home
+          </Link>
+          <h2 style={{
+            fontSize: '2rem',
+            margin: '0.5rem 0',
+            background: 'linear-gradient(135deg, #ff6b6b, #ee5a24)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: 'bold'
+          }}>
+            🎬 YouTube → MP3
+          </h2>
+          <p style={{ color: '#666', margin: 0 }}>
+            Enter a YouTube URL and click Convert.
+          </p>
+        </div>
 
-  let videoId
-  try {
-    const u = new URL(rawUrl)
-    videoId =
-      u.searchParams.get('v') ||
-      (u.hostname.includes('youtu.be') && u.pathname.slice(1))
-    if (!videoId) throw new Error()
-  } catch {
-    return res.status(400).send('Invalid YouTube URL')
-  }
+        <ConverterForm
+          placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
+          onSubmit={url => {
+            setLoading(true)
+            // We aren't actually fetching here, so loading is brief
+            handleConvert(url)
+            setLoading(false)
+          }}
+          loading={loading}
+        />
 
-  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
-
-  res.setHeader('Content-Type', 'audio/mpeg')
-  res.setHeader(
-    'Content-Disposition',
-    `attachment; filename="${videoId}.mp3"`
+        <ResultLink link={downloadLink} error={error} />
+      </div>
+    </div>
   )
+}
 
-  // 1) Spawn ytdl audio-only stream
-  const audioStream = ytdl(videoUrl, {
-    filter: 'audioonly',
-    quality: 'highestaudio',
-    highWaterMark: 1 << 25, // 32 MB buffer
-  })
-
-  // 2) Pipe into ffmpeg to convert to mp3 on the fly
-  const ffmpegStream = ffmpeg(audioStream)
-    .audioCodec('libmp3lame')
-    .format('mp3')
-    .on('error', err => {
-      console.error('ffmpeg error:', err)
-      if (!res.headersSent) {
-        res.status(500).end()
-      }
-    })
-    .pipe(new PassThrough(), { end: true })
-
-  // 3) Pipe ffmpeg output to the response
-  ffmpegStream.pipe(res)
+// Prevent static prerendering
+export async function getServerSideProps() {
+  return { props: {} }
 }
