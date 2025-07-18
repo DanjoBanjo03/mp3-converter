@@ -17,6 +17,31 @@ export default function ResultLink({ link, error }) {
 
   if (!link) return null
 
+  const buttonStyles = {
+    display: 'inline-block',
+    padding: '1rem 2rem',
+    background: 'linear-gradient(135deg, #3498db, #2980b9)',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    borderRadius: '12px',
+    fontSize: '1.1rem',
+    fontWeight: '600',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 4px 15px rgba(52, 152, 219, 0.3)'
+  }
+
+  const hoverStyles = (e, hover) => {
+    if (hover) {
+      e.currentTarget.style.transform = 'translateY(-2px)'
+      e.currentTarget.style.boxShadow = '0 8px 25px rgba(52, 152, 219, 0.4)'
+    } else {
+      e.currentTarget.style.transform = 'translateY(0)'
+      e.currentTarget.style.boxShadow = '0 4px 15px rgba(52, 152, 219, 0.3)'
+    }
+  }
+
   return (
     <div style={{
       marginTop: '1rem',
@@ -45,33 +70,14 @@ export default function ResultLink({ link, error }) {
         </p>
       </div>
 
-      <a
-        href={link}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          display: 'inline-block',
-          padding: '1rem 2rem',
-          background: 'linear-gradient(135deg, #3498db, #2980b9)',
-          color: 'white',
-          textDecoration: 'none',
-          borderRadius: '12px',
-          fontSize: '1.1rem',
-          fontWeight: '600',
-          transition: 'all 0.3s ease',
-          boxShadow: '0 4px 15px rgba(52, 152, 219, 0.3)'
-        }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 8px 25px rgba(52, 152, 219, 0.4)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 4px 15px rgba(52, 152, 219, 0.3)';
-        }}
+      <button
+        onClick={() => window.open(link, '_blank')}
+        style={buttonStyles}
+        onMouseOver={e => hoverStyles(e, true)}
+        onMouseOut={e => hoverStyles(e, false)}
       >
         📥 Download MP3
-      </a>
+      </button>
     </div>
   )
 }
