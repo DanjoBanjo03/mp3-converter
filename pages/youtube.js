@@ -1,66 +1,37 @@
 // pages/youtube.js
-import { useState } from 'react'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ConverterForm from '../components/ConverterForm'
-import ResultLink from '../components/ResultLink'
-import TagForm from '../components/TagForm'
-import Footer from '../components/Footer'
+import ResultLink    from '../components/ResultLink'
 
 export default function YouTubePage() {
-  const [mode, setMode] = useState('convert') // 'convert' | 'download' | 'tag'
-  const [origUrl, setOrigUrl] = useState(null)
-  const [link, setLink] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [origin,       setOrigin      ] = useState('')
+  const [downloadLink, setDownloadLink] = useState(null)
+  const [error,        setError       ] = useState(null)
+  const [loading,      setLoading     ] = useState(false)
 
-  async function handleConvert(url) {
-    setLoading(true)
+  // Capture the app's origin (http://localhost:3000 or your Vercel URL)
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
+
+  function handleConvert(inputUrl) {
     setError(null)
-    setLink(null)
-    setOrigUrl(url)
+    setDownloadLink(null)
 
     try {
-      const res = await fetch('/api/youtube', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Conversion failed')
+      // Validate & normalize YouTube URL
+      const parsed = new URL(inputUrl)
+      const vid = parsed.searchParams.get('v')
+        || (parsed.hostname.includes('youtu.be') && parsed.pathname.slice(1))
+      if (!vid) throw new Error('Invalid YouTube URL')
 
-      const ct = res.headers.get('content-type') || ''
-      if (ct.includes('application/json')) {
-        const { downloadUrl } = await res.json()
-        setLink(downloadUrl)
-      } else {
-        const blob = await res.blob()
-        setLink(URL.createObjectURL(blob))
-      }
-      setMode('download')
+      // Build the GET link into your API
+      const link = `${origin}/api/youtube?url=${encodeURIComponent(inputUrl)}`
+      setDownloadLink(link)
     } catch (err) {
       setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleTag(metadata) {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/youtube', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: origUrl, ...metadata })
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Tagging failed')
-
-      const blob = await res.blob()
-      setLink(URL.createObjectURL(blob))
-      setMode('download')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -76,7 +47,7 @@ export default function YouTubePage() {
         margin: '0 auto',
         background: 'white',
         borderRadius: '20px',
-        padding: window.innerWidth <= 768 ? '1.5rem' : '2rem',
+        padding: '2rem',
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -84,14 +55,13 @@ export default function YouTubePage() {
             color: '#666',
             textDecoration: 'none',
             fontSize: '0.9rem',
-            marginBottom: '1rem',
             display: 'inline-block'
           }}>
             ← Back to Home
           </Link>
           <h2 style={{
             fontSize: '2rem',
-            marginBottom: '0.5rem',
+            margin: '0.5rem 0',
             background: 'linear-gradient(135deg, #ff6b6b, #ee5a24)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -100,74 +70,27 @@ export default function YouTubePage() {
             🎬 YouTube → MP3
           </h2>
           <p style={{ color: '#666', margin: 0 }}>
-            Convert YouTube videos to MP3 format
+            Paste a YouTube link below and click Convert.
           </p>
         </div>
 
-        {mode === 'convert' && (
-          <ConverterForm
-            placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
-            onSubmit={handleConvert}
-            loading={loading}
-          />
-        )}
+        <ConverterForm
+          placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
+          onSubmit={async (url) => {
+            setLoading(true)
+            handleConvert(url)
+            setLoading(false)
+          }}
+          loading={loading}
+        />
 
-        {mode === 'download' && link && (
-          <>
-            <ResultLink link={link} error={error} />
-            <button
-              onClick={() => setMode('tag')}
-              style={{
-                marginTop: '1rem',
-                padding: '0.75rem 1.5rem',
-                background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)'
-              }}
-              onMouseOver={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 8px 25px rgba(76, 175, 80, 0.4)';
-              }}
-              onMouseOut={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.3)';
-              }}
-            >
-              🏷️ Tag it
-            </button>
-          </>
-        )}
-
-        {mode === 'tag' && origUrl && (
-          <TagForm
-            origUrl={origUrl}
-            onSubmit={handleTag}
-            onBack={() => setMode('download')}
-            apiEndpoint="/api/youtube"
-            loading={loading}
-          />
-        )}
-
-        {error && (
-          <div style={{
-            color: '#e74c3c',
-            background: '#fdf2f2',
-            padding: '1rem',
-            borderRadius: '8px',
-            marginTop: '1rem',
-            border: '1px solid #fecaca'
-          }}>
-            {error}
-          </div>
-        )}
+        <ResultLink link={downloadLink} error={error} />
       </div>
-      <Footer />
     </div>
   )
+}
+
+// Prevent static prerendering (so window is defined on the client)
+export async function getServerSideProps() {
+  return { props: {} }
 }
