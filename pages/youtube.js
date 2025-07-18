@@ -6,12 +6,12 @@ import ConverterForm from '../components/ConverterForm'
 import ResultLink    from '../components/ResultLink'
 
 export default function YouTubePage() {
-  const [origin,        setOrigin       ] = useState('')
-  const [downloadLink,  setDownloadLink ] = useState(null)
-  const [error,         setError        ] = useState(null)
-  const [loading,       setLoading      ] = useState(false)
+  const [origin,       setOrigin      ] = useState('')
+  const [downloadLink, setDownloadLink] = useState(null)
+  const [error,        setError       ] = useState(null)
+  const [loading,      setLoading     ] = useState(false)
 
-  // Capture window.location.origin on the client
+  // Capture the app's origin (http://localhost:3000 or your Vercel URL)
   useEffect(() => {
     setOrigin(window.location.origin)
   }, [])
@@ -23,11 +23,11 @@ export default function YouTubePage() {
     try {
       // Validate & normalize YouTube URL
       const parsed = new URL(inputUrl)
-      const videoId = parsed.searchParams.get('v')
+      const vid = parsed.searchParams.get('v')
         || (parsed.hostname.includes('youtu.be') && parsed.pathname.slice(1))
-      if (!videoId) throw new Error('Invalid YouTube URL')
+      if (!vid) throw new Error('Invalid YouTube URL')
 
-      // Build absolute GET link to your API
+      // Build the GET link into your API
       const link = `${origin}/api/youtube?url=${encodeURIComponent(inputUrl)}`
       setDownloadLink(link)
     } catch (err) {
@@ -84,14 +84,13 @@ export default function YouTubePage() {
           loading={loading}
         />
 
-        {/* The corrected ResultLink usage */}
         <ResultLink link={downloadLink} error={error} />
       </div>
     </div>
   )
 }
 
-// Force SSR so origin is grabbed client-side, not at build time
+// Prevent static prerendering (so window is defined on the client)
 export async function getServerSideProps() {
   return { props: {} }
 }
