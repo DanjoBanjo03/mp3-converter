@@ -21,6 +21,7 @@ export default function YouTubePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       })
+
       if (!res.ok) {
         let msg = 'Conversion failed'
         try {
@@ -30,10 +31,21 @@ export default function YouTubePage() {
         throw new Error(msg)
       }
 
-      // Always an MP3 stream
-      const mp3Blob = await res.blob()
-      const blobUrl = URL.createObjectURL(mp3Blob)
-      setLink(blobUrl)
+      const contentType = res.headers.get('Content-Type') || ''
+      if (contentType.includes('application/json')) {
+        // Fallback path: get the raw downloadUrl
+        const { downloadUrl } = await res.json()
+        // Fetch the MP3 blob ourselves
+        const mp3Res = await fetch(downloadUrl)
+        if (!mp3Res.ok) throw new Error('Failed to download MP3')
+        const blob = await mp3Res.blob()
+        setLink(URL.createObjectURL(blob))
+      } else {
+        // Direct MP3 stream
+        const blob = await res.blob()
+        setLink(URL.createObjectURL(blob))
+      }
+
     } catch (err) {
       setError(err.message)
     } finally {
