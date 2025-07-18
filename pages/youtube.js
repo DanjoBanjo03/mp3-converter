@@ -6,13 +6,13 @@ import ConverterForm from '../components/ConverterForm'
 import ResultLink    from '../components/ResultLink'
 
 export default function YouTubePage() {
+  const [origin,  setOrigin ] = useState('')
   const [link,    setLink   ] = useState(null)
   const [error,   setError  ] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [origin,  setOrigin ] = useState('')
 
-  // Capture window.origin on mount
   useEffect(() => {
+    // only runs in browser
     setOrigin(window.location.origin)
   }, [])
 
@@ -32,8 +32,8 @@ export default function YouTubePage() {
         throw new Error(err.error || 'Conversion failed')
       }
       const { downloadUrl } = await res.json()
-      // Prefix with our origin to make it absolute:
-      setLink(`${window.location.origin}${downloadUrl}`)
+      // prefix with origin
+      setLink(origin + downloadUrl)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -57,21 +57,12 @@ export default function YouTubePage() {
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link
-            href="/"
-            style={{
-              color: '#666',
-              textDecoration: 'none',
-              fontSize: '0.9rem',
-              marginBottom: '1rem',
-              display: 'inline-block'
-            }}
-          >
+          <Link href="/" style={{ color: '#666', textDecoration: 'none', fontSize: '0.9rem' }}>
             ← Back to Home
           </Link>
           <h2 style={{
             fontSize: '2rem',
-            marginBottom: '0.5rem',
+            margin: '0.5rem 0',
             background: 'linear-gradient(135deg, #ff6b6b, #ee5a24)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -79,9 +70,6 @@ export default function YouTubePage() {
           }}>
             🎬 YouTube → MP3
           </h2>
-          <p style={{ color: '#666', margin: 0 }}>
-            Convert YouTube videos to MP3 format
-          </p>
         </div>
 
         <ConverterForm
@@ -92,22 +80,12 @@ export default function YouTubePage() {
 
         <ResultLink link={link} error={error} />
 
-        {link && (
-          <p style={{
-            wordBreak: 'break-all',
-            marginTop: '1rem',
-            fontSize: '0.85rem',
-            color: '#666'
-          }}>
-            Debug link: {link}
-          </p>
-        )}
       </div>
     </div>
   )
 }
 
-// Disable static prerendering
+// This page must be SSR so window is defined only on client
 export async function getServerSideProps() {
   return { props: {} }
 }

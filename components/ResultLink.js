@@ -47,7 +47,8 @@ export default function ResultLink({ link, error }) {
 
       <a
         href={link}
-        download
+        target="_blank"
+        rel="noopener noreferrer"
         style={{
           display: 'inline-block',
           padding: '1rem 2rem',
@@ -61,12 +62,12 @@ export default function ResultLink({ link, error }) {
           boxShadow: '0 4px 15px rgba(52, 152, 219, 0.3)'
         }}
         onMouseOver={(e) => {
-          e.target.style.transform = 'translateY(-2px)';
-          e.target.style.boxShadow = '0 8px 25px rgba(52, 152, 219, 0.4)';
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 8px 25px rgba(52, 152, 219, 0.4)';
         }}
         onMouseOut={(e) => {
-          e.target.style.transform = 'translateY(0)';
-          e.target.style.boxShadow = '0 4px 15px rgba(52, 152, 219, 0.3)';
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 15px rgba(52, 152, 219, 0.3)';
         }}
       >
         📥 Download MP3
