@@ -2,7 +2,7 @@
 
 export const config = {
   api: {
-    bodyParser: { sizeLimit: '1mb' }, // small JSON only
+    bodyParser: { sizeLimit: '1mb' }, // only small JSON in
   },
 }
 
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No URL provided' })
   }
 
-  // 1) Extract video ID
+  // 1) Extract the YouTube video ID
   let videoId
   try {
     const u = new URL(url)
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid YouTube URL' })
   }
 
-  // 2) Proxy via RapidAPI to get an MP3 URL
+  // 2) Ask RapidAPI for the MP3 link
   let mp3Url
   try {
     const apiRes = await fetch(
@@ -52,18 +52,24 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message || 'Proxy conversion failed' })
   }
 
-  // 3) Fetch the MP3 server-side and stream it back
+  // 3) Fetch the MP3 server-side and stream it (redirect fallback on non-200)
   try {
     const mp3Res = await fetch(mp3Url)
     if (!mp3Res.ok) {
-      console.error(`Proxy MP3 fetch failed: ${mp3Res.status}`)
-      throw new Error('Proxy MP3 fetch failed')
+      console.warn(`Proxy MP3 fetch failed: ${mp3Res.status}; redirecting to raw URL`)
+      // 307 redirect to the actual MP3 link
+      res.setHeader('Location', mp3Url)
+      return res.status(307).end()
     }
+
+    // Stream the MP3 bytes
     res.setHeader('Content-Type', 'audio/mpeg')
     res.setHeader('Content-Disposition', `attachment; filename="${videoId}.mp3"`)
     return mp3Res.body.pipe(res)
   } catch (err) {
     console.error('Streaming error:', err)
-    return res.status(500).json({ error: err.message || 'Failed to stream MP3' })
+    // On error, also redirect
+    res.setHeader('Location', mp3Url)
+    return res.status(307).end()
   }
 }
