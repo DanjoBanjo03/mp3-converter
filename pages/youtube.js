@@ -1,33 +1,34 @@
 // pages/youtube.js
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ConverterForm from '../components/ConverterForm'
 import ResultLink    from '../components/ResultLink'
 
 export default function YouTubePage() {
-  const [downloadLink, setDownloadLink] = useState(null)
-  const [error,        setError       ] = useState(null)
-  const [loading,      setLoading     ] = useState(false)
+  const [origin,        setOrigin       ] = useState('')
+  const [downloadLink,  setDownloadLink ] = useState(null)
+  const [error,         setError        ] = useState(null)
+  const [loading,       setLoading      ] = useState(false)
 
-  // On mount we capture window.location.origin so we can build absolute API URLs
-  const [origin, setOrigin] = useState('')
+  // Capture window.location.origin on the client
   useEffect(() => {
     setOrigin(window.location.origin)
   }, [])
 
-  function handleConvert(url) {
+  function handleConvert(inputUrl) {
     setError(null)
     setDownloadLink(null)
 
     try {
-      // Normalize & validate YouTube URL
-      const u   = new URL(url)
-      const vid = u.searchParams.get('v') ||
-                  (u.hostname.includes('youtu.be') && u.pathname.slice(1))
-      if (!vid) throw new Error('Invalid YouTube URL')
+      // Validate & normalize YouTube URL
+      const parsed = new URL(inputUrl)
+      const videoId = parsed.searchParams.get('v')
+        || (parsed.hostname.includes('youtu.be') && parsed.pathname.slice(1))
+      if (!videoId) throw new Error('Invalid YouTube URL')
 
-      // Build direct GET-download link
-      const link = `${origin}/api/youtube?url=${encodeURIComponent(url)}`
+      // Build absolute GET link to your API
+      const link = `${origin}/api/youtube?url=${encodeURIComponent(inputUrl)}`
       setDownloadLink(link)
     } catch (err) {
       setError(err.message)
@@ -75,7 +76,7 @@ export default function YouTubePage() {
 
         <ConverterForm
           placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
-          onSubmit={url => {
+          onSubmit={async (url) => {
             setLoading(true)
             handleConvert(url)
             setLoading(false)
@@ -83,13 +84,14 @@ export default function YouTubePage() {
           loading={loading}
         />
 
+        {/* The corrected ResultLink usage */}
         <ResultLink link={downloadLink} error={error} />
       </div>
     </div>
   )
 }
 
-// Force SSR (so window.origin is always correct)
+// Force SSR so origin is grabbed client-side, not at build time
 export async function getServerSideProps() {
   return { props: {} }
 }
