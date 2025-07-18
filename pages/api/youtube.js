@@ -2,7 +2,7 @@
 
 export const config = {
   api: {
-    bodyParser: { sizeLimit: '1mb' }, // only small JSON in
+    bodyParser: { sizeLimit: '1mb' }, // small JSON only
   },
 }
 
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No URL provided' })
   }
 
-  // 1) Extract the YouTube video ID
+  // 1) Extract video ID
   let videoId
   try {
     const u = new URL(url)
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid YouTube URL' })
   }
 
-  // 2) Ask RapidAPI for the MP3 link
+  // 2) Proxy via RapidAPI to get an MP3 URL
   let mp3Url
   try {
     const apiRes = await fetch(
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     )
     const data = await apiRes.json()
     if (!apiRes.ok || (!data.link && !data.data?.url)) {
-      throw new Error(data.message || 'No MP3 URL returned from proxy')
+      throw new Error(data.message || 'No MP3 URL from proxy')
     }
     mp3Url = data.link || data.data.url
   } catch (err) {
@@ -52,25 +52,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message || 'Proxy conversion failed' })
   }
 
-  // 3) Try server-side fetch of the MP3
+  // 3) Fetch the MP3 server-side and stream it back
   try {
     const mp3Res = await fetch(mp3Url)
     if (!mp3Res.ok) {
-      console.warn(`Proxy MP3 responded ${mp3Res.status}; falling back to giving raw URL`)
-      // Send the raw link back so client can handle it
-      return res.status(200).json({ downloadUrl: mp3Url })
+      console.error(`Proxy MP3 fetch failed: ${mp3Res.status}`)
+      throw new Error('Proxy MP3 fetch failed')
     }
-
     res.setHeader('Content-Type', 'audio/mpeg')
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${videoId}.mp3"`
-    )
-    // Pipe the MP3 bytes directly to the client
+    res.setHeader('Content-Disposition', `attachment; filename="${videoId}.mp3"`)
     return mp3Res.body.pipe(res)
   } catch (err) {
-    console.error('Failed to fetch MP3 from proxy URL:', err)
-    // If even the fetch throws, hand back the raw link
-    return res.status(200).json({ downloadUrl: mp3Url })
+    console.error('Streaming error:', err)
+    return res.status(500).json({ error: err.message || 'Failed to stream MP3' })
   }
 }

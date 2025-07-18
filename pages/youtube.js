@@ -17,17 +17,17 @@ export default function YouTubePage() {
 
     try {
       const res = await fetch('/api/youtube', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url }),
+        body: JSON.stringify({ url }),
       })
       if (!res.ok) {
-        let errMsg = 'Conversion failed'
+        let msg = 'Conversion failed'
         try {
-          const errData = await res.json()
-          errMsg = errData.error || errMsg
+          const err = await res.json()
+          msg = err.error || msg
         } catch {}
-        throw new Error(errMsg)
+        throw new Error(msg)
       }
 
       // Always an MP3 stream
@@ -57,16 +57,13 @@ export default function YouTubePage() {
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link
-            href="/"
-            style={{
-              color: '#666',
-              textDecoration: 'none',
-              fontSize: '0.9rem',
-              marginBottom: '1rem',
-              display: 'inline-block'
-            }}
-          >
+          <Link href="/" style={{
+            color: '#666',
+            textDecoration: 'none',
+            fontSize: '0.9rem',
+            marginBottom: '1rem',
+            display: 'inline-block'
+          }}>
             ← Back to Home
           </Link>
           <h2 style={{
