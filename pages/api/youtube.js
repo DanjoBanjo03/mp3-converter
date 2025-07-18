@@ -17,12 +17,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No URL provided' })
   }
 
-  // 1) Pull out the video ID
+  // 1) Extract the YouTube video ID
   let videoId
   try {
     const u = new URL(url)
-    videoId = u.searchParams.get('v') ||
-              (u.hostname.includes('youtu.be') && u.pathname.slice(1))
+    videoId =
+      u.searchParams.get('v') ||
+      (u.hostname.includes('youtu.be') && u.pathname.slice(1))
     if (!videoId) throw new Error()
   } catch {
     return res.status(400).json({ error: 'Invalid YouTube URL' })
@@ -51,11 +52,13 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message || 'Proxy conversion failed' })
   }
 
-  // 3) Server‐side fetch and stream as MP3
+  // 3) Try server-side fetch of the MP3
   try {
     const mp3Res = await fetch(mp3Url)
     if (!mp3Res.ok) {
-      throw new Error(`Failed to download MP3: ${mp3Res.status}`)
+      console.warn(`Proxy MP3 responded ${mp3Res.status}; falling back to giving raw URL`)
+      // Send the raw link back so client can handle it
+      return res.status(200).json({ downloadUrl: mp3Url })
     }
 
     res.setHeader('Content-Type', 'audio/mpeg')
@@ -63,9 +66,11 @@ export default async function handler(req, res) {
       'Content-Disposition',
       `attachment; filename="${videoId}.mp3"`
     )
-    mp3Res.body.pipe(res)
+    // Pipe the MP3 bytes directly to the client
+    return mp3Res.body.pipe(res)
   } catch (err) {
     console.error('Failed to fetch MP3 from proxy URL:', err)
-    return res.status(500).json({ error: err.message || 'Failed to fetch MP3' })
+    // If even the fetch throws, hand back the raw link
+    return res.status(200).json({ downloadUrl: mp3Url })
   }
 }
