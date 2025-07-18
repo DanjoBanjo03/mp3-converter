@@ -1,6 +1,6 @@
 // pages/youtube.js
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ConverterForm from '../components/ConverterForm'
 import ResultLink    from '../components/ResultLink'
@@ -9,6 +9,12 @@ export default function YouTubePage() {
   const [link,    setLink   ] = useState(null)
   const [error,   setError  ] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [origin,  setOrigin ] = useState('')
+
+  // Capture window.origin on mount
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
 
   async function handleConvert(url) {
     setLoading(true)
@@ -26,7 +32,8 @@ export default function YouTubePage() {
         throw new Error(err.error || 'Conversion failed')
       }
       const { downloadUrl } = await res.json()
-      setLink(downloadUrl)
+      // Prefix with our origin to make it absolute:
+      setLink(`${window.location.origin}${downloadUrl}`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -95,13 +102,12 @@ export default function YouTubePage() {
             Debug link: {link}
           </p>
         )}
-
       </div>
     </div>
   )
 }
 
-// Prevent static prerendering
+// Disable static prerendering
 export async function getServerSideProps() {
   return { props: {} }
 }
