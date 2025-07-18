@@ -7,37 +7,31 @@ import ResultLink    from '../components/ResultLink'
 
 export default function YouTubePage() {
   const [origin,  setOrigin ] = useState('')
-  const [link,    setLink   ] = useState(null)
+  const [downloadLink, setDownloadLink] = useState(null)
   const [error,   setError  ] = useState(null)
   const [loading, setLoading] = useState(false)
 
+  // Grab the origin (e.g. http://localhost:3000)
   useEffect(() => {
-    // only runs in browser
     setOrigin(window.location.origin)
   }, [])
 
-  async function handleConvert(url) {
-    setLoading(true)
+  function handleConvert(url) {
     setError(null)
-    setLink(null)
+    setDownloadLink(null)
 
     try {
-      const res = await fetch('/api/youtube', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Conversion failed')
-      }
-      const { downloadUrl } = await res.json()
-      // prefix with origin
-      setLink(origin + downloadUrl)
+      // Validate YouTube URL
+      const u = new URL(url)
+      const vid = u.searchParams.get('v') ||
+                  (u.hostname.includes('youtu.be') && u.pathname.slice(1))
+      if (!vid) throw new Error('Invalid YouTube URL')
+
+      // Build the GET download link
+      const link = `${window.location.origin}/api/youtube?url=${encodeURIComponent(url)}`
+      setDownloadLink(link)
     } catch (err) {
       setError(err.message)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -57,7 +51,12 @@ export default function YouTubePage() {
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link href="/" style={{ color: '#666', textDecoration: 'none', fontSize: '0.9rem' }}>
+          <Link href="/" style={{
+            color: '#666',
+            textDecoration: 'none',
+            fontSize: '0.9rem',
+            display: 'inline-block'
+          }}>
             ← Back to Home
           </Link>
           <h2 style={{
@@ -70,22 +69,29 @@ export default function YouTubePage() {
           }}>
             🎬 YouTube → MP3
           </h2>
+          <p style={{ color: '#666', margin: 0 }}>
+            Enter a YouTube URL and click Convert.
+          </p>
         </div>
 
         <ConverterForm
           placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
-          onSubmit={handleConvert}
+          onSubmit={url => {
+            setLoading(true)
+            // We aren't actually fetching here, so loading is brief
+            handleConvert(url)
+            setLoading(false)
+          }}
           loading={loading}
         />
 
-        <ResultLink link={link} error={error} />
-
+        <ResultLink link={downloadLink} error={error} />
       </div>
     </div>
   )
 }
 
-// This page must be SSR so window is defined only on client
+// Prevent static prerendering
 export async function getServerSideProps() {
   return { props: {} }
 }

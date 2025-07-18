@@ -1,97 +1,86 @@
-// pages/youtube.js
+// pages/api/youtube.js
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import ConverterForm from '../components/ConverterForm'
-import ResultLink    from '../components/ResultLink'
+export const config = {
+  api: {
+    bodyParser: { sizeLimit: '1mb' },
+  },
+}
 
-export default function YouTubePage() {
-  const [origin,  setOrigin ] = useState('')
-  const [downloadLink, setDownloadLink] = useState(null)
-  const [error,   setError  ] = useState(null)
-  const [loading, setLoading] = useState(false)
+// Helper to pull the MP3 URL from RapidAPI
+async function fetchProxyMp3Url(videoId) {
+  const resp = await fetch(
+    `https://${process.env.YOUTUBE_API_HOST}/dl?id=${encodeURIComponent(videoId)}`,
+    {
+      method: 'GET',
+      headers: {
+        'X-RapidAPI-Key':  process.env.YOUTUBE_API_KEY,
+        'X-RapidAPI-Host': process.env.YOUTUBE_API_HOST,
+      },
+    }
+  )
+  const data = await resp.json()
+  if (!resp.ok || (!data.link && !data.data?.url)) {
+    throw new Error(data.message || 'No MP3 URL returned from proxy')
+  }
+  return data.link || data.data.url
+}
 
-  // Grab the origin (e.g. http://localhost:3000)
-  useEffect(() => {
-    setOrigin(window.location.origin)
-  }, [])
-
-  function handleConvert(url) {
-    setError(null)
-    setDownloadLink(null)
+export default async function handler(req, res) {
+  // —— DOWNLOAD MODE ——  
+  // GET /api/youtube?url=<YouTube URL>
+  if (req.method === 'GET') {
+    const rawUrl = req.query.url
+    if (!rawUrl) {
+      return res.status(400).send('No URL provided')
+    }
+    // extract videoId
+    let videoId
+    try {
+      const u = new URL(rawUrl)
+      videoId = u.searchParams.get('v') ||
+                (u.hostname.includes('youtu.be') && u.pathname.slice(1))
+      if (!videoId) throw new Error()
+    } catch {
+      return res.status(400).send('Invalid YouTube URL')
+    }
 
     try {
-      // Validate YouTube URL
-      const u = new URL(url)
-      const vid = u.searchParams.get('v') ||
-                  (u.hostname.includes('youtu.be') && u.pathname.slice(1))
-      if (!vid) throw new Error('Invalid YouTube URL')
-
-      // Build the GET download link
-      const link = `${window.location.origin}/api/youtube?url=${encodeURIComponent(url)}`
-      setDownloadLink(link)
+      const mp3Url = await fetchProxyMp3Url(videoId)
+      const mp3Res = await fetch(mp3Url)
+      if (mp3Res.ok) {
+        res.setHeader('Content-Type', 'audio/mpeg')
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${videoId}.mp3"`
+        )
+        return mp3Res.body.pipe(res)
+      }
+      // fallback to redirect
+      res.setHeader('Location', mp3Url)
+      return res.status(307).end()
     } catch (err) {
-      setError(err.message)
+      console.error('Download error:', err)
+      return res.status(500).send('Download failed')
     }
   }
 
-  return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-      padding: '2rem 1rem',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      <div style={{
-        maxWidth: '600px',
-        margin: '0 auto',
-        background: 'white',
-        borderRadius: '20px',
-        padding: '2rem',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link href="/" style={{
-            color: '#666',
-            textDecoration: 'none',
-            fontSize: '0.9rem',
-            display: 'inline-block'
-          }}>
-            ← Back to Home
-          </Link>
-          <h2 style={{
-            fontSize: '2rem',
-            margin: '0.5rem 0',
-            background: 'linear-gradient(135deg, #ff6b6b, #ee5a24)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: 'bold'
-          }}>
-            🎬 YouTube → MP3
-          </h2>
-          <p style={{ color: '#666', margin: 0 }}>
-            Enter a YouTube URL and click Convert.
-          </p>
-        </div>
+  // —— PREVIEW MODE ——  
+  // POST /api/youtube  { url }
+  if (req.method === 'POST') {
+    const { url } = req.body || {}
+    if (!url) {
+      return res.status(400).json({ error: 'No URL provided' })
+    }
+    try {
+      new URL(url) // validate
+    } catch {
+      return res.status(400).json({ error: 'Invalid YouTube URL' })
+    }
+    const downloadLink = `/api/youtube?url=${encodeURIComponent(url)}`
+    return res.status(200).json({ downloadUrl: downloadLink })
+  }
 
-        <ConverterForm
-          placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
-          onSubmit={url => {
-            setLoading(true)
-            // We aren't actually fetching here, so loading is brief
-            handleConvert(url)
-            setLoading(false)
-          }}
-          loading={loading}
-        />
-
-        <ResultLink link={downloadLink} error={error} />
-      </div>
-    </div>
-  )
-}
-
-// Prevent static prerendering
-export async function getServerSideProps() {
-  return { props: {} }
+  // —— METHOD NOT ALLOWED ——  
+  res.setHeader('Allow', ['GET', 'POST'])
+  res.status(405).end()
 }
