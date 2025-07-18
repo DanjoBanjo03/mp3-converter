@@ -85,6 +85,17 @@ export default function YouTubePage() {
 
         <ResultLink link={link} error={error} />
 
+        {link && (
+          <p style={{
+            wordBreak: 'break-all',
+            marginTop: '1rem',
+            fontSize: '0.85rem',
+            color: '#666'
+          }}>
+            Debug link: {link}
+          </p>
+        )}
+
       </div>
     </div>
   )
