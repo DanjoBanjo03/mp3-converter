@@ -2,13 +2,15 @@
 
 export const config = {
   api: {
-    bodyParser: { sizeLimit: '1mb' }, // allow JSON in POST
+    bodyParser: { sizeLimit: '1mb' },
   },
 }
 
-async function getMp3Url(videoId) {
-  const apiRes = await fetch(
-    `https://${process.env.YOUTUBE_API_HOST}/dl?id=${encodeURIComponent(videoId)}`, {
+// Helper to pull the MP3 URL from RapidAPI
+async function fetchProxyMp3Url(videoId) {
+  const resp = await fetch(
+    `https://${process.env.YOUTUBE_API_HOST}/dl?id=${encodeURIComponent(videoId)}`,
+    {
       method: 'GET',
       headers: {
         'X-RapidAPI-Key':  process.env.YOUTUBE_API_KEY,
@@ -16,21 +18,24 @@ async function getMp3Url(videoId) {
       },
     }
   )
-  const data = await apiRes.json()
-  if (!apiRes.ok || (!data.link && !data.data?.url)) {
-    throw new Error(data.message || 'No MP3 URL from proxy')
+  const data = await resp.json()
+  if (!resp.ok || (!data.link && !data.data?.url)) {
+    throw new Error(data.message || 'No MP3 URL returned from proxy')
   }
   return data.link || data.data.url
 }
 
 export default async function handler(req, res) {
-  // Support GET for direct download link
+  // 1) DOWNLOAD MODE: GET /api/youtube?url=<encoded YouTube URL>
   if (req.method === 'GET') {
-    const { url } = req.query
-    if (!url) return res.status(400).send('No URL provided')
+    const rawUrl = req.query.url
+    if (!rawUrl) {
+      return res.status(400).send('No URL provided')
+    }
+    // extract videoId
     let videoId
     try {
-      const u = new URL(url)
+      const u = new URL(rawUrl)
       videoId = u.searchParams.get('v') ||
                 (u.hostname.includes('youtu.be') && u.pathname.slice(1))
       if (!videoId) throw new Error()
@@ -39,47 +44,41 @@ export default async function handler(req, res) {
     }
 
     try {
-      const mp3Url = await getMp3Url(videoId)
+      const mp3Url = await fetchProxyMp3Url(videoId)
+      // Attempt to stream via your function:
       const mp3Res = await fetch(mp3Url)
-      if (!mp3Res.ok) {
-        // Redirect the browser to the proxy directly
-        res.setHeader('Location', mp3Url)
-        return res.status(307).end()
+      if (mp3Res.ok) {
+        res.setHeader('Content-Type', 'audio/mpeg')
+        res.setHeader('Content-Disposition', `attachment; filename="${videoId}.mp3"`)
+        return mp3Res.body.pipe(res)
       }
-      res.setHeader('Content-Type', 'audio/mpeg')
-      res.setHeader('Content-Disposition', `attachment; filename="${videoId}.mp3"`)
-      return mp3Res.body.pipe(res)
+      // Fallback: redirect browser to mp3Url
+      res.setHeader('Location', mp3Url)
+      return res.status(307).end()
     } catch (err) {
-      console.error('Stream/download error:', err)
+      console.error('Download error:', err)
       return res.status(500).send('Download failed')
     }
   }
 
-  // Otherwise POST JSON for preview
+  // 2) PREVIEW MODE: POST /api/youtube { url }
   if (req.method === 'POST') {
     const { url } = req.body || {}
-    if (!url) return res.status(400).json({ error: 'No URL provided' })
-
-    let videoId
+    if (!url) {
+      return res.status(400).json({ error: 'No URL provided' })
+    }
+    // Validate/extract videoId
     try {
-      const u = new URL(url)
-      videoId = u.searchParams.get('v') ||
-                (u.hostname.includes('youtu.be') && u.pathname.slice(1))
-      if (!videoId) throw new Error()
+      new URL(url) // just to validate
     } catch {
       return res.status(400).json({ error: 'Invalid YouTube URL' })
     }
-
-    try {
-      const downloadUrl = `/api/youtube?url=${encodeURIComponent(url)}`
-      return res.status(200).json({ downloadUrl })
-    } catch (err) {
-      console.error('Proxy JSON error:', err)
-      return res.status(500).json({ error: 'Could not generate download link' })
-    }
+    // Return the GET-download link
+    const downloadLink = `/api/youtube?url=${encodeURIComponent(url)}`
+    return res.status(200).json({ downloadUrl: downloadLink })
   }
 
-  // Everything else:
+  // 3) Method not allowed
   res.setHeader('Allow', ['GET','POST'])
   res.status(405).end()
 }

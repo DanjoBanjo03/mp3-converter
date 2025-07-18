@@ -16,6 +16,7 @@ export default function YouTubePage() {
     setLink(null)
 
     try {
+      // Ask your API for the download URL (always a link back to /api/youtube?url=...)
       const res = await fetch('/api/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,7 +27,6 @@ export default function YouTubePage() {
         throw new Error(err.error || 'Conversion failed')
       }
       const { downloadUrl } = await res.json()
-      // downloadUrl is our own GET endpoint
       setLink(downloadUrl)
     } catch (err) {
       setError(err.message)
@@ -44,6 +44,14 @@ export default function YouTubePage() {
         loading={loading}
       />
       <ResultLink link={link} error={error} />
+      <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+        <Link href="/">← Back Home</Link>
+      </div>
     </div>
   )
+}
+
+// Prevent static prerendering
+export async function getServerSideProps() {
+  return { props: {} }
 }
