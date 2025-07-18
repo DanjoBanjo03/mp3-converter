@@ -1,18 +1,13 @@
 // pages/api/youtube.js
 
-import ytdl from 'ytdl-core'
+import ytdl from 'play-dl'                   // we’ll use play-dl for reliability
 import ffmpeg from 'fluent-ffmpeg'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
-import { PassThrough } from 'stream'
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 
-// Disable Next.js’s default body parser; we only handle GET
-export const config = {
-  api: {
-    bodyParser: false
-  }
-}
+// Turn off body parsing; we only handle GET
+export const config = { api: { bodyParser: false } }
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -20,26 +15,26 @@ export default async function handler(req, res) {
     return res.status(405).send('Method Not Allowed')
   }
 
-  const { url } = req.query
-  if (!url || typeof url !== 'string' || !ytdl.validateURL(url)) {
-    return res.status(400).send('Invalid or missing URL query parameter')
+  const raw = req.query.url
+  if (!raw || typeof raw !== 'string') {
+    return res.status(400).send('Missing or invalid URL query parameter')
   }
 
-  // Extract the YouTube video ID
+  // Extract video ID
   let videoId
   try {
-    const u = new URL(url)
+    const u = new URL(raw)
     videoId =
       u.searchParams.get('v') ||
       (u.hostname.includes('youtu.be') && u.pathname.slice(1))
     if (!videoId) throw new Error()
   } catch {
-    return res.status(400).send('Could not extract YouTube video ID')
+    return res.status(400).send('Invalid YouTube URL')
   }
 
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
-  // Set headers so browser treats it as a downloadable MP3
+  // Set headers to force download of MP3
   res.setHeader('Content-Type', 'audio/mpeg')
   res.setHeader(
     'Content-Disposition',
@@ -47,28 +42,27 @@ export default async function handler(req, res) {
   )
 
   try {
-    // 1) Stream audio-only from YouTube
-    const ytStream = ytdl(videoUrl, {
-      filter: 'audioonly',
-      quality: 'highestaudio',
-      highWaterMark: 1 << 25, // 32 MB buffer
-    })
+    // 1) Get an audio-only stream from YouTube
+    const ply = await ytdl.stream(videoUrl, { quality: 2 })  
+    if (!ply.stream) throw new Error('Could not get audio stream')
 
-    // 2) Pipe into FFmpeg to transcode to MP3 on-the-fly
-    const ffmpegStream = ffmpeg(ytStream)
+    // 2) Transcode on-the-fly and pipe directly into res
+    ffmpeg(ply.stream)
       .audioCodec('libmp3lame')
       .format('mp3')
+      .on('start', cmd => console.log('FFmpeg start:', cmd))
       .on('error', err => {
-        console.error('FFmpeg error:', err)
-        // we won't throw here to avoid unhandled exceptions
+        console.error('FFmpeg Error:', err)
+        // If headers not yet sent, return an error code
+        if (!res.headersSent) res.status(500).end(`Conversion error: ${err.message}`)
       })
-      .pipe(new PassThrough(), { end: true })
+      .on('end', () => {
+        console.log('FFmpeg finished successfully')
+      })
+      .pipe(res, { end: true })
 
-    // 3) Pipe the resulting MP3 to the client
-    ffmpegStream.pipe(res)
   } catch (err) {
     console.error('Conversion failed:', err)
-    // Return a clean error response
-    res.status(500).send(`Conversion failed: ${err.message}`)
+    return res.status(500).send(`Conversion failed: ${err.message}`)
   }
 }
