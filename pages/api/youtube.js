@@ -1,86 +1,66 @@
 // pages/api/youtube.js
 
-export const config = {
-  api: {
-    bodyParser: { sizeLimit: '1mb' },
-  },
-}
+import ytdl from 'ytdl-core'
+import ffmpeg from 'fluent-ffmpeg'
+import ffmpegPath from 'ffmpeg-static'
+import { PassThrough } from 'stream'
 
-// Helper to pull the MP3 URL from RapidAPI
-async function fetchProxyMp3Url(videoId) {
-  const resp = await fetch(
-    `https://${process.env.YOUTUBE_API_HOST}/dl?id=${encodeURIComponent(videoId)}`,
-    {
-      method: 'GET',
-      headers: {
-        'X-RapidAPI-Key':  process.env.YOUTUBE_API_KEY,
-        'X-RapidAPI-Host': process.env.YOUTUBE_API_HOST,
-      },
-    }
-  )
-  const data = await resp.json()
-  if (!resp.ok || (!data.link && !data.data?.url)) {
-    throw new Error(data.message || 'No MP3 URL returned from proxy')
-  }
-  return data.link || data.data.url
-}
+ffmpeg.setFfmpegPath(ffmpegPath)
+
+// Disable body parsing; we only support GET
+export const config = { api: { bodyParser: false } }
 
 export default async function handler(req, res) {
-  // —— DOWNLOAD MODE ——  
-  // GET /api/youtube?url=<YouTube URL>
-  if (req.method === 'GET') {
-    const rawUrl = req.query.url
-    if (!rawUrl) {
-      return res.status(400).send('No URL provided')
-    }
-    // extract videoId
-    let videoId
-    try {
-      const u = new URL(rawUrl)
-      videoId = u.searchParams.get('v') ||
-                (u.hostname.includes('youtu.be') && u.pathname.slice(1))
-      if (!videoId) throw new Error()
-    } catch {
-      return res.status(400).send('Invalid YouTube URL')
-    }
-
-    try {
-      const mp3Url = await fetchProxyMp3Url(videoId)
-      const mp3Res = await fetch(mp3Url)
-      if (mp3Res.ok) {
-        res.setHeader('Content-Type', 'audio/mpeg')
-        res.setHeader(
-          'Content-Disposition',
-          `attachment; filename="${videoId}.mp3"`
-        )
-        return mp3Res.body.pipe(res)
-      }
-      // fallback to redirect
-      res.setHeader('Location', mp3Url)
-      return res.status(307).end()
-    } catch (err) {
-      console.error('Download error:', err)
-      return res.status(500).send('Download failed')
-    }
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return res.status(405).end('Method Not Allowed')
   }
 
-  // —— PREVIEW MODE ——  
-  // POST /api/youtube  { url }
-  if (req.method === 'POST') {
-    const { url } = req.body || {}
-    if (!url) {
-      return res.status(400).json({ error: 'No URL provided' })
-    }
-    try {
-      new URL(url) // validate
-    } catch {
-      return res.status(400).json({ error: 'Invalid YouTube URL' })
-    }
-    const downloadLink = `/api/youtube?url=${encodeURIComponent(url)}`
-    return res.status(200).json({ downloadUrl: downloadLink })
+  const { url } = req.query
+  if (!url || !ytdl.validateURL(url)) {
+    return res.status(400).end('Invalid or missing URL query parameter')
   }
 
-  // —— METHOD NOT ALLOWED ——  
-  res.setHeader('Allow', ['GET', 'POST'])
-  res.status(405).end()
+  // Extract video ID from YouTube URL
+  let videoId
+  try {
+    const u = new URL(url)
+    videoId =
+      u.searchParams.get('v') ||
+      (u.hostname.includes('youtu.be') && u.pathname.slice(1))
+  } catch {
+    return res.status(400).end('Could not parse URL')
+  }
+  if (!videoId) {
+    return res.status(400).end('Could not extract YouTube video ID')
+  }
+
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+
+  // Tell the browser we’re sending back a downloadable MP3
+  res.setHeader('Content-Type', 'audio/mpeg')
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${videoId}.mp3"`
+  )
+
+  // 1) Stream audio-only from YouTube
+  const ytStream = ytdl(videoUrl, {
+    filter: 'audioonly',
+    quality: 'highestaudio',
+    highWaterMark: 1 << 25, // 32 MB buffer
+  })
+
+  // 2) Pipe into FFmpeg to transcode on-the-fly
+  const ffmpegStream = ffmpeg(ytStream)
+    .audioCodec('libmp3lame')
+    .format('mp3')
+    .on('error', err => {
+      console.error('FFmpeg error:', err)
+      if (!res.headersSent) res.status(500).end()
+    })
+    .pipe(new PassThrough(), { end: true })
+
+  // 3) Pipe the transcoded MP3 back to the client
+  ffmpegStream.pipe(res)
 }

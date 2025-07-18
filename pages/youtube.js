@@ -1,17 +1,16 @@
 // pages/youtube.js
-
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ConverterForm from '../components/ConverterForm'
 import ResultLink    from '../components/ResultLink'
 
 export default function YouTubePage() {
-  const [origin,  setOrigin ] = useState('')
   const [downloadLink, setDownloadLink] = useState(null)
-  const [error,   setError  ] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [error,        setError       ] = useState(null)
+  const [loading,      setLoading     ] = useState(false)
 
-  // Grab the origin (e.g. http://localhost:3000)
+  // On mount we capture window.location.origin so we can build absolute API URLs
+  const [origin, setOrigin] = useState('')
   useEffect(() => {
     setOrigin(window.location.origin)
   }, [])
@@ -21,14 +20,14 @@ export default function YouTubePage() {
     setDownloadLink(null)
 
     try {
-      // Validate YouTube URL
-      const u = new URL(url)
+      // Normalize & validate YouTube URL
+      const u   = new URL(url)
       const vid = u.searchParams.get('v') ||
                   (u.hostname.includes('youtu.be') && u.pathname.slice(1))
       if (!vid) throw new Error('Invalid YouTube URL')
 
-      // Build the GET download link
-      const link = `${window.location.origin}/api/youtube?url=${encodeURIComponent(url)}`
+      // Build direct GET-download link
+      const link = `${origin}/api/youtube?url=${encodeURIComponent(url)}`
       setDownloadLink(link)
     } catch (err) {
       setError(err.message)
@@ -70,7 +69,7 @@ export default function YouTubePage() {
             🎬 YouTube → MP3
           </h2>
           <p style={{ color: '#666', margin: 0 }}>
-            Enter a YouTube URL and click Convert.
+            Paste a YouTube link below and click Convert.
           </p>
         </div>
 
@@ -78,7 +77,6 @@ export default function YouTubePage() {
           placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
           onSubmit={url => {
             setLoading(true)
-            // We aren't actually fetching here, so loading is brief
             handleConvert(url)
             setLoading(false)
           }}
@@ -91,7 +89,7 @@ export default function YouTubePage() {
   )
 }
 
-// Prevent static prerendering
+// Force SSR (so window.origin is always correct)
 export async function getServerSideProps() {
   return { props: {} }
 }
