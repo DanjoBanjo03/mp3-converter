@@ -1,20 +1,15 @@
 // pages/api/youtube.js
-import { spawn } from 'child_process'
+
+import ytdl from '@distube/ytdl-core'
+import ffmpeg from 'fluent-ffmpeg'
 import ffmpegPath from 'ffmpeg-static'
-import ffmpeg     from 'fluent-ffmpeg'
-import fs         from 'fs'
-import os         from 'os'
-import path       from 'path'
-import NodeID3    from 'node-id3'
-import youtubedl  from 'youtube-dl-exec'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import NodeID3 from 'node-id3'
 
-// Point fluent-ffmpeg at the static binary
 ffmpeg.setFfmpegPath(ffmpegPath)
-
-// Allow large Base64 payloads (for cover art)
-export const config = {
-  api: { bodyParser: { sizeLimit: '10mb' } }
-}
+export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,39 +18,90 @@ export default async function handler(req, res) {
   }
 
   const { url, title, artist, year, coverData } = req.body || {}
-  if (!url) {
-    return res.status(400).json({ error: 'No URL provided' })
-  }
-
-  // Normalize YouTube URL (strip extra params)
-  let videoUrl
-  try {
-    const u = new URL(url)
-    const v = u.searchParams.get('v')
-    if (!v) throw new Error('Missing v parameter')
-    videoUrl = `https://www.youtube.com/watch?v=${v}`
-  } catch {
+  if (!url || !ytdl.validateURL(url)) {
     return res.status(400).json({ error: 'Invalid YouTube URL' })
   }
 
-  // Prepare temp output path
-  const tmpDir  = os.tmpdir()
-  const base    = (title || `yt-${Date.now()}`)
+  // Strip extra params, pull bare video ID
+  let videoId
+  try {
+    const u = new URL(url)
+    videoId = u.searchParams.get('v') ||
+              (u.hostname.includes('youtu.be') && u.pathname.slice(1))
+    if (!videoId) throw new Error()
+  } catch {
+    return res.status(400).json({ error: 'Could not extract video ID' })
+  }
+
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+
+  // Step #1: try to fetch full metadata
+  console.log('▶️ Normalized videoUrl:', videoUrl)
+  let info
+  try {
+    info = await ytdl.getInfo(videoUrl)
+  } catch (err1) {
+    console.warn('ytdl.getInfo failed, trying getBasicInfo:', err1.message)
+    try {
+      info = await ytdl.getBasicInfo(videoUrl)
+    } catch (err2) {
+      console.warn('Both ytdl methods failed, falling back to RapidAPI proxy:', err2)
+
+      // RapidAPI proxy branch
+      try {
+        const vid = encodeURIComponent(videoId)
+        const apiRes = await fetch(
+          `https://${process.env.YOUTUBE_API_HOST}/dl?id=${vid}`, {
+            method: 'GET',
+            headers: {
+              'X-RapidAPI-Key':  process.env.YOUTUBE_API_KEY,
+              'X-RapidAPI-Host': process.env.YOUTUBE_API_HOST,
+            }
+          }
+        )
+        const data = await apiRes.json()
+        if (!apiRes.ok || (!data.link && !data.data?.url)) {
+          throw new Error(data.message || 'No MP3 URL in proxy response')
+        }
+        return res.status(200).json({
+          downloadUrl: data.data?.url || data.link
+        })
+      } catch (proxyErr) {
+        console.error('RapidAPI proxy also failed:', proxyErr)
+        return res.status(500).json({
+          error: proxyErr.message || 'Both ytdl and proxy failed'
+        })
+      }
+    }
+  }
+
+  // At this point `info` is set
+  const base = (title || info.videoDetails.title || `yt-${videoId}`)
     .replace(/[\/\\?%*:|"<>]/g, '_')
+  const tmpDir  = os.tmpdir()
+  const rawPath = path.join(tmpDir, `${base}.raw`)
   const mp3Path = path.join(tmpDir, `${base}.mp3`)
 
   try {
-    // 1) Download & convert via youtube-dl-exec
-    await youtubedl(videoUrl, {
-      output: mp3Path,
-      extractAudio: true,
-      audioFormat: 'mp3',
-      audioQuality: '0',         // best quality
-      noPlaylist: true,
-      ffmpegLocation: ffmpegPath // <<< tell ytdl where ffmpeg lives
+    // 2) Download raw audio
+    await new Promise((resolve, reject) => {
+      ytdl(videoUrl, { filter: 'audioonly', quality: 'highestaudio' })
+        .pipe(fs.createWriteStream(rawPath))
+        .on('finish', resolve)
+        .on('error', reject)
     })
 
-    // 2) Embed ID3 tags if provided
+    // 3) Transcode to MP3
+    await new Promise((resolve, reject) => {
+      ffmpeg(rawPath)
+        .audioCodec('libmp3lame')
+        .audioQuality(4)
+        .on('end', resolve)
+        .on('error', reject)
+        .save(mp3Path)
+    })
+
+    // 4) Tag if requested
     if (title && artist && year) {
       const tags = { title, artist, year }
       if (coverData) {
@@ -65,24 +111,27 @@ export default async function handler(req, res) {
             mime: m[1],
             type: { id: 3, name: 'front cover' },
             description: 'Cover art',
-            imageBuffer: Buffer.from(m[2], 'base64')
+            imageBuffer: Buffer.from(m[2], 'base64'),
           }
         }
       }
       NodeID3.write(tags, mp3Path)
     }
 
-    // 3) Stream back to client
+    // 5) Stream MP3 back
     res.setHeader('Content-Type', 'audio/mpeg')
     res.setHeader('Content-Disposition', `attachment; filename="${base}.mp3"`)
-    fs.createReadStream(mp3Path)
-      .pipe(res)
-      .on('finish', () => {
-        fs.unlink(mp3Path, () => {})
-      })
+    const stream = fs.createReadStream(mp3Path)
+    stream.pipe(res)
+    stream.on('finish', () => {
+      fs.unlink(rawPath, () => {})
+      fs.unlink(mp3Path,  () => {})
+    })
 
   } catch (err) {
-    console.error('youtube-dl error:', err)
-    res.status(500).json({ error: err.message || 'Conversion failed' })
+    console.error('Conversion error:', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message || 'Internal server error' })
+    }
   }
 }

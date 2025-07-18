@@ -21,20 +21,31 @@ export default function YouTubePage() {
 
     try {
       const res = await fetch('/api/youtube', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url }),
+        body: JSON.stringify({ url }),
       })
-      if (!res.ok) throw new Error((await res.json()).error || 'Conversion failed')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || 'Conversion failed')
+      }
 
-      const ct = res.headers.get('content-type') || ''
-      if (ct.includes('application/json')) {
+      const contentType = res.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        // Proxy fallback: fetch the real MP3 blob
         const { downloadUrl } = await res.json()
-        setLink(downloadUrl)
+        const mp3Res = await fetch(downloadUrl)
+        if (!mp3Res.ok) {
+          throw new Error('Failed to fetch MP3 from proxy URL')
+        }
+        const mp3Blob = await mp3Res.blob()
+        setLink(URL.createObjectURL(mp3Blob))
       } else {
+        // Direct MP3 stream from our API
         const blob = await res.blob()
         setLink(URL.createObjectURL(blob))
       }
+
       setMode('download')
     } catch (err) {
       setError(err.message)
@@ -52,7 +63,10 @@ export default function YouTubePage() {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ url: origUrl, ...metadata }),
       })
-      if (!res.ok) throw new Error((await res.json()).error || 'Tagging failed')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Tagging failed')
+      }
 
       const blob = await res.blob()
       setLink(URL.createObjectURL(blob))
@@ -68,7 +82,7 @@ export default function YouTubePage() {
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-      padding: '2rem 1rem',                // simplified—no window access
+      padding: '2rem 1rem',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
@@ -76,19 +90,22 @@ export default function YouTubePage() {
         margin: '0 auto',
         background: 'white',
         borderRadius: '20px',
-        padding: '2rem',                   // consistent padding
+        padding: '2rem',
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link href="/" style={{
-            color: '#666',
-            textDecoration: 'none',
-            fontSize: '0.9rem',
-            marginBottom: '1rem',
-            display: 'inline-block'
-          }}>
-            ← Back to Home
-          </Link>
+            <Link
+              href="/"
+              style={{
+                color: '#666',
+                textDecoration: 'none',
+                fontSize: '0.9rem',
+                marginBottom: '1rem',
+                display: 'inline-block'
+              }}
+            >
+              ← Back to Home
+            </Link>
           <h2 style={{
             fontSize: '2rem',
             marginBottom: '0.5rem',
