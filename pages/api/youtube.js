@@ -2,7 +2,7 @@
 
 import ytdl from 'ytdl-core'
 import ffmpeg from 'fluent-ffmpeg'
-import ffmpegPath from 'ffmpeg-static'
+import ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import { PassThrough } from 'stream'
 
 ffmpeg.setFfmpegPath(ffmpegPath)
