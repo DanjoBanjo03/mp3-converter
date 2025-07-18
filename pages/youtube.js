@@ -21,31 +21,12 @@ export default function YouTubePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       })
-
       if (!res.ok) {
-        let msg = 'Conversion failed'
-        try {
-          const err = await res.json()
-          msg = err.error || msg
-        } catch {}
-        throw new Error(msg)
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Conversion failed')
       }
-
-      const contentType = res.headers.get('Content-Type') || ''
-      if (contentType.includes('application/json')) {
-        // Fallback path: get the raw downloadUrl
-        const { downloadUrl } = await res.json()
-        // Fetch the MP3 blob ourselves
-        const mp3Res = await fetch(downloadUrl)
-        if (!mp3Res.ok) throw new Error('Failed to download MP3')
-        const blob = await mp3Res.blob()
-        setLink(URL.createObjectURL(blob))
-      } else {
-        // Direct MP3 stream
-        const blob = await res.blob()
-        setLink(URL.createObjectURL(blob))
-      }
-
+      const { downloadUrl } = await res.json()
+      setLink(downloadUrl)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -69,13 +50,16 @@ export default function YouTubePage() {
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link href="/" style={{
-            color: '#666',
-            textDecoration: 'none',
-            fontSize: '0.9rem',
-            marginBottom: '1rem',
-            display: 'inline-block'
-          }}>
+          <Link
+            href="/"
+            style={{
+              color: '#666',
+              textDecoration: 'none',
+              fontSize: '0.9rem',
+              marginBottom: '1rem',
+              display: 'inline-block'
+            }}
+          >
             ← Back to Home
           </Link>
           <h2 style={{
